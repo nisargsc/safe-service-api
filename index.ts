@@ -23,7 +23,7 @@ app.get("/", (req: Request, resp: Response) => {
 app.post("/propose-txn", async (req: Request, resp: Response) => {
   console.log("Serving /propose-txn ...");
   const safeAddress = req.body.safeAddress;
-  const txnData = req.body.safeTxnData;
+  const txnData = req.body.txnData;
   console.log("Getting txnHash with on-chain call...");
   const txnHash = await getTxnHash(safeAddress, txnData);
   const respJson = {
@@ -33,7 +33,7 @@ app.post("/propose-txn", async (req: Request, resp: Response) => {
   };
   console.log("Creating entry in db...");
   await transactionModel.create(respJson);
-  resp.json(respJson);
+  resp.json(respJson).status(200);
 });
 
 app.get("/get-txn", async (req: Request, resp: Response) => {
@@ -49,12 +49,12 @@ app.get("/get-txn", async (req: Request, resp: Response) => {
       txnHash,
       txnData: txn?.txnData,
     };
-    resp.json(respJson);
+    resp.json(respJson).status(200);
   } else {
     const respJson = {
       msg: "Can not find the txn: need both safeAddress and txnHash",
     };
-    resp.json(respJson);
+    resp.json(respJson).status(400);
   }
 });
 
