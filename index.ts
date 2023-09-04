@@ -20,29 +20,52 @@ app.get("/", (req: Request, resp: Response) => {
   resp.json(respJson);
 });
 
+/*
+request body
+{
+  safeAddress: "string address of safe",
+  txnData: {
+    to: "to addr",
+    value: "value",
+    data: "data"
+  }
+}
+ */
 app.post("/propose-txn", async (req: Request, resp: Response) => {
   console.log("Serving /propose-txn ...");
   const safeAddress = req.body.safeAddress;
   const txnData = req.body.txnData;
-  console.log("Getting txnHash with on-chain call...");
-  const txnHash = await getTxnHash(safeAddress, txnData);
-  const respJson = {
-    safeAddress,
-    txnHash,
-    txnData,
-  };
-  console.log("Creating entry in db...");
-  await transactionModel.create(respJson);
-  resp.json(respJson).status(200);
+  if (safeAddress && txnData) {
+    console.log("Getting txnHash with on-chain call...");
+    const txnHash = await getTxnHash(safeAddress, txnData);
+    console.log({ txnHash });
+    const respJson = {
+      safeAddress,
+      txnHash,
+      txnData,
+    };
+    console.log("Creating entry in db...");
+    await transactionModel.create(respJson);
+    resp.json(respJson).status(200);
+  } else {
+    const respJson = {
+      msg: "Err: Need all the required params in request",
+    };
+    resp.json(respJson).status(400);
+  }
 });
 
+// request params= ?safeAddress=<safe addr>,txnHash=<txnHash>
 app.get("/get-txn", async (req: Request, resp: Response) => {
   console.log("Serving /get-txn ...");
   const safeAddress = req.query.safeAddress;
   const txnHash = req.query.txnHash;
   if (safeAddress && txnHash) {
     console.log("Finding txn from db...");
-    const txn = await transactionModel.findOne({ txnHash, safeAddress });
+    const txn = await transactionModel.findOne({
+      filter: { txnHash, safeAddress },
+      projection: { _id: 0 },
+    });
 
     const respJson = {
       safeAddress,
@@ -52,7 +75,46 @@ app.get("/get-txn", async (req: Request, resp: Response) => {
     resp.json(respJson).status(200);
   } else {
     const respJson = {
-      msg: "Can not find the txn: need both safeAddress and txnHash",
+      msg: "Err: Need all the required params in request",
+    };
+    resp.json(respJson).status(400);
+  }
+});
+
+/*
+request body
+{
+  safeAddress: "Address of safe",
+  txnData: "txn data",
+  ownerAddress: "owner that signed the txn",
+  sign: "Signature of the owner"
+}
+ */
+app.post("/add-sign", async (req: Request, resp: Response) => {
+  console.log("Serving /add-sign ...");
+  const safeAddress = req.body.safeAddress;
+  const txnData = req.body.txnData;
+  const ownerAddress = req.body.ownerAddress;
+  const sign = req.body.sign;
+
+  if (safeAddress && sign && txnData && ownerAddress) {
+    console.log("Getting txn hash from data...");
+    const txnHash = await getTxnHash(safeAddress, txnData);
+    console.log("Finding txn from db...");
+    const txn = await transactionModel.findOne({ txnHash, safeAddress });
+
+    // TODO: Update and add the signatures here
+    await txn?.updateOne({ txnHash, safeAddress });
+
+    const respJson = {
+      safeAddress,
+      txnHash,
+      txnData: txnData,
+    };
+    resp.json(respJson).status(200);
+  } else {
+    const respJson = {
+      msg: "Err: Need all the required params in request",
     };
     resp.json(respJson).status(400);
   }
