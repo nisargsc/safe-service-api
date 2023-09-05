@@ -11,7 +11,7 @@ const transactionDataSchema = new mongoose.Schema({
     required: true,
   },
   value: {
-    type: Number,
+    type: String,
     required: true,
   },
   data: {
@@ -19,16 +19,16 @@ const transactionDataSchema = new mongoose.Schema({
     required: true,
   },
   operation: {
-    type: Number, // Can only be 0 or 1
+    type: Number, // Can only be 0 or 1, need to enforce that check later
   },
   safeTxGas: {
-    type: Number,
+    type: String,
   },
-  baseGase: {
-    type: Number,
+  baseGas: {
+    type: String,
   },
   gasPrice: {
-    type: Number,
+    type: String,
   },
   gasToken: {
     type: String,
@@ -38,18 +38,25 @@ const transactionDataSchema = new mongoose.Schema({
   },
 });
 
-// TODO: Add signatures here
 const transactionSchema = new mongoose.Schema({
+  safeAddress: {
+    type: String,
+  },
   txnHash: {
     type: String,
     unique: true,
   },
-  safeAddress: {
-    type: String,
-  },
   txnData: {
     type: transactionDataSchema,
   },
+  signatures: [{
+    signer: {
+      type:String
+    },
+    signature: {
+      type:String
+    }
+  }],
 });
 
 export const transactionModel = mongoose.model(

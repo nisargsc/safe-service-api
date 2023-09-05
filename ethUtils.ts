@@ -1,8 +1,12 @@
 import Safe, {
   ContractNetworksConfig,
+  EthSafeSignature,
   EthersAdapter,
 } from "@safe-global/protocol-kit";
-import { SafeTransactionDataPartial } from "@safe-global/safe-core-sdk-types";
+import {
+  SafeSignature,
+  SafeTransactionDataPartial,
+} from "@safe-global/safe-core-sdk-types";
 import { ethers } from "ethers";
 
 export const provider = new ethers.providers.JsonRpcProvider(
@@ -44,9 +48,24 @@ export async function getTxnHash(
   return safeSdk.getTransactionHash(txn);
 }
 
+export async function combineSigns(
+  safeAddress: string,
+  txnData: SafeTransactionDataPartial,
+  signatures: EthSafeSignature[]
+) {
+  const safeSdk = await getSafeSdk(safeAddress);
+  const txn = await safeSdk.createTransaction({ safeTransactionData: txnData });
+  signatures.map((sign) => {
+    txn.addSignature(sign);
+  });
+  const combo = txn.encodedSignatures();
+  return combo;
+}
+
 module.exports = {
   provider,
   ethAdapter,
   getSafeSdk,
   getTxnHash,
+  combineSigns
 };
