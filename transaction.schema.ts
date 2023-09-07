@@ -49,14 +49,19 @@ const transactionSchema = new mongoose.Schema({
   txnData: {
     type: transactionDataSchema,
   },
-  signatures: [{
-    signer: {
-      type:String
+  signatures: [
+    {
+      signer: {
+        type: String,
+      },
+      data: {
+        type: String,
+      },
     },
-    signature: {
-      type:String
-    }
-  }],
+  ],
+  signCombo: {
+    type: String,
+  },
 });
 
 export const transactionModel = mongoose.model(

@@ -4,7 +4,6 @@ import Safe, {
   EthersAdapter,
 } from "@safe-global/protocol-kit";
 import {
-  SafeSignature,
   SafeTransactionDataPartial,
 } from "@safe-global/safe-core-sdk-types";
 import { ethers } from "ethers";
@@ -62,10 +61,37 @@ export async function combineSigns(
   return combo;
 }
 
+export async function checkSigns(
+  safeAddress: string,
+  executor: string,
+  txnHash: string,
+  combinedSign: string,
+  requiredSigns: number
+) {
+  const abi = [
+    "function checkNSignatures(address executor, bytes32 dataHash, bytes memory, bytes memory signatures, uint256 requiredSignatures) public view",
+  ];
+
+  const SafeContract = new ethers.Contract(
+    safeAddress,
+    abi,
+    provider.getSigner()
+  );
+
+  await SafeContract.checkNSignatures(
+    executor,
+    txnHash,
+    combinedSign,
+    "0x",
+    requiredSigns
+  );
+}
+
 module.exports = {
   provider,
   ethAdapter,
   getSafeSdk,
   getTxnHash,
-  combineSigns
+  combineSigns,
+  checkSigns,
 };

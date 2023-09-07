@@ -4,11 +4,8 @@ dotenv.config();
 import express, { Request, Response } from "express";
 import mongoose from "mongoose";
 import { transactionModel } from "./transaction.schema";
-import { combineSigns, getTxnHash } from "./ethUtils";
-import {
-  SafeSignature,
-  SafeTransactionDataPartial,
-} from "@safe-global/safe-core-sdk-types";
+import { checkSigns, combineSigns, getTxnHash } from "./ethUtils";
+import { SafeTransactionDataPartial } from "@safe-global/safe-core-sdk-types";
 import { EthSafeSignature } from "@safe-global/protocol-kit";
 
 const app = express();
@@ -98,16 +95,15 @@ app.post("/add-sign", async (req: Request, resp: Response) => {
   console.log({ req: req.body });
   const safeAddress = req.body.safeAddress;
   const txnData = req.body.txnData;
-  const ownerAddress = req.body.ownerAddress;
   const sign = req.body.sign;
 
-  if (safeAddress && sign && txnData && ownerAddress) {
+  if (safeAddress && sign && txnData) {
     console.log("Getting txn hash from data...");
     const txnHash = await getTxnHash(safeAddress, txnData);
     console.log("Finding txn from db...");
 
     // Update in db
-    const dbTxn = await transactionModel
+    const dbTxn1 = await transactionModel
       .findOneAndUpdate(
         {
           txnHash,
@@ -116,8 +112,8 @@ app.post("/add-sign", async (req: Request, resp: Response) => {
         {
           $push: {
             signatures: {
-              signer: ownerAddress,
-              signature: sign,
+              signer: sign.signer,
+              data: sign.data,
             },
           },
         },
@@ -127,7 +123,36 @@ app.post("/add-sign", async (req: Request, resp: Response) => {
       )
       .select("-_id -__v -txnData._id");
 
-    const respJson = { txn: dbTxn };
+    let signatures: EthSafeSignature[] = [];
+    dbTxn1?.signatures.map((sign) => {
+      signatures.push(
+        new EthSafeSignature(sign.signer as string, sign.data as string)
+      );
+      console.log(sign);
+    });
+
+    const combo = await combineSigns(
+      safeAddress.toString(),
+      txnData,
+      signatures
+    );
+
+    const dbTxn2 = await transactionModel
+      .findOneAndUpdate(
+        {
+          txnHash,
+          safeAddress,
+        },
+        {
+          signCombo: combo,
+        },
+        {
+          new: true,
+        }
+      )
+      .select("-_id -__v -txnData._id");
+
+    const respJson = { txn: dbTxn2 };
     resp.json(respJson).status(200);
   } else {
     const respJson = {
@@ -138,18 +163,20 @@ app.post("/add-sign", async (req: Request, resp: Response) => {
 });
 
 // request params= ?safeAddress=<safe addr>,txnHash=<txnHash>,executor=<executor addr>
-app.get("/checkzicute", async (req: Request, resp: Response) => {
-  console.log("Serving /checkzicute ...");
+app.get("/check-signs", async (req: Request, resp: Response) => {
+  console.log("Serving /check-signs ...");
   const safeAddress = req.query.safeAddress;
   const txnHash = req.query.txnHash;
   const executor = req.query.executor;
-  if (safeAddress && txnHash && executor) {
+  const requiredSigns = req.query.requiredSigns;
+
+  if (safeAddress && txnHash && executor && requiredSigns) {
     console.log("Finding txn from db...");
     const txn = await transactionModel
       .findOne({ txnHash, safeAddress })
       .select("-_id -__v -txnData._id");
 
-    console.log("----------------------here---------------------------");
+    // Combine the signatures in one bytes string
     let txnData: SafeTransactionDataPartial = {
       nonce: txn?.txnData?.nonce as number,
       to: txn?.txnData?.to as string,
@@ -162,13 +189,12 @@ app.get("/checkzicute", async (req: Request, resp: Response) => {
       gasToken: txn?.txnData?.gasToken as string,
       refundReceiver: txn?.txnData?.refundReceiver as string,
     };
-    console.log({txnData})
     let signatures: EthSafeSignature[] = [];
     txn?.signatures.map((sign) => {
       signatures.push(
-        new EthSafeSignature(sign.signer as string, sign.signature as string)
+        new EthSafeSignature(sign.signer as string, sign.data as string)
       );
-      console.log(sign)
+      console.log(sign);
     });
 
     const combo = await combineSigns(
@@ -176,9 +202,26 @@ app.get("/checkzicute", async (req: Request, resp: Response) => {
       txnData,
       signatures
     );
-    console.log({ combo });
-    console.log("----------------------here---------------------------");
-    const respJson = { txn };
+
+    try {
+      await checkSigns(
+        safeAddress as string,
+        executor as string,
+        txnHash as string,
+        combo as string,
+        requiredSigns as unknown as number
+      );
+    } catch (err) {
+      const respJson = {
+        msg: `Err: ${err}`,
+      };
+      resp.json(respJson).status(500);
+    }
+    const respJson = {
+      txn: {
+        signCombo: combo,
+      },
+    };
     resp.json(respJson).status(200);
   } else {
     const respJson = {
